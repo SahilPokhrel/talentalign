@@ -1,14 +1,42 @@
 from typing import List, Dict, Set
 import re
-import spacy
 from rapidfuzz import process, fuzz
 from sentence_transformers import SentenceTransformer, util
+import spacy
 
-# --- Load NLP models
-nlp = spacy.load("en_core_web_sm")
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+# -------------------------------------------------------------------
+# Lazy-loading for heavy models (to prevent crashes at startup)
+# -------------------------------------------------------------------
+_nlp = None
+_embedder = None
 
-# --- Canonical skills dictionary
+def get_nlp():
+    global _nlp
+    if _nlp is None:
+        print("[DEBUG] Loading spaCy model...")
+        try:
+            _nlp = spacy.load("en_core_web_sm")
+            print("[DEBUG] spaCy model loaded successfully")
+        except OSError:
+            print("[ERROR] spaCy model not found. Run: python -m spacy download en_core_web_sm")
+            raise
+    return _nlp
+
+def get_embedder():
+    global _embedder
+    if _embedder is None:
+        print("[DEBUG] Loading SentenceTransformer model...")
+        try:
+            _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            print("[DEBUG] SentenceTransformer model loaded successfully")
+        except Exception as e:
+            print(f"[ERROR] Failed to load SentenceTransformer: {e}")
+            raise
+    return _embedder
+
+# -------------------------------------------------------------------
+# Skills dictionary + aliases
+# -------------------------------------------------------------------
 SKILL_ALIASES: Dict[str, List[str]] = {
     "react": ["react.js", "reactjs", "react js"],
     "javascript": ["js", "ecmascript"],
@@ -46,7 +74,7 @@ SKILL_ALIASES: Dict[str, List[str]] = {
     "fastapi": [],
 }
 
-# Flatten vocabulary
+# Flatten dictionary
 CANONICAL = list(SKILL_ALIASES.keys())
 ALIAS_TO_CANON: Dict[str, str] = {}
 for canon, aliases in SKILL_ALIASES.items():
@@ -54,10 +82,11 @@ for canon, aliases in SKILL_ALIASES.items():
     for a in aliases:
         ALIAS_TO_CANON[a] = canon
 
-# ✅ include both aliases + canonical skills
 VOCAB = list(ALIAS_TO_CANON.keys()) + CANONICAL
 
-
+# -------------------------------------------------------------------
+# Utility functions
+# -------------------------------------------------------------------
 def normalize_text(s: str) -> str:
     s = s.lower()
     s = re.sub(r"[\u2010-\u2015]", "-", s)  # normalize hyphens
@@ -65,20 +94,21 @@ def normalize_text(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
-
 def extract_skill_candidates(text: str, threshold: int = 92) -> Set[str]:
-    """
-    Use spaCy noun chunks + tokens + n-grams, then fuzzy-match to vocabulary.
-    Threshold is adjustable: use stricter (95+) for resumes, looser (~90) for JD.
-    """
+    print("[DEBUG] extract_skill_candidates called")
     text_norm = normalize_text(text)
-    doc = nlp(text_norm)
+    print(f"[DEBUG] Normalized text length = {len(text_norm)}")
+
+    doc = get_nlp()(text_norm)
+    print("[DEBUG] spaCy doc processed")
 
     grams = set()
     toks = [t.text for t in doc if not t.is_stop]
     grams.update(toks)
     grams.update([" ".join(toks[i:i + 2]) for i in range(len(toks) - 1)])
     grams.update([chunk.text for chunk in doc.noun_chunks])
+
+    print(f"[DEBUG] Candidate grams generated = {len(grams)}")
 
     found: Set[str] = set()
     for g in grams:
@@ -87,19 +117,24 @@ def extract_skill_candidates(text: str, threshold: int = 92) -> Set[str]:
         match, score, _ = process.extractOne(g, VOCAB, scorer=fuzz.token_set_ratio)
         if match and score >= threshold:
             found.add(ALIAS_TO_CANON[match])
+
+    print(f"[DEBUG] Skills matched = {found}")
     return found
 
-
 def semantic_similarity(a: str, b: str) -> float:
+    print("[DEBUG] semantic_similarity called")
     if not a.strip() or not b.strip():
+        print("[DEBUG] One of the inputs is empty")
         return 0.0
-    emb = embedder.encode([a, b], convert_to_tensor=True)
+    emb = get_embedder().encode([a, b], convert_to_tensor=True)
     sim = util.cos_sim(emb[0], emb[1]).item()
+    print(f"[DEBUG] Cosine similarity = {sim}")
     return max(0.0, min(1.0, sim)) * 100
 
-
 def quantify_issues(resume_text: str) -> Dict[str, int]:
+    print("[DEBUG] quantify_issues called")
     txt = normalize_text(resume_text)
+
     bullets = [b for b in re.split(r"\n[-•*]\s*", resume_text) if b.strip()]
     with_numbers = sum(bool(re.search(r"\b\d+(\.\d+)?%?\b", b)) for b in bullets)
 
@@ -116,18 +151,20 @@ def quantify_issues(resume_text: str) -> Dict[str, int]:
         if re.search(rf"\b{sec}\b", txt):
             sections_present.append(sec)
 
-    return {
+    result = {
         "bullets_total": len(bullets),
         "bullets_with_numbers": with_numbers,
         "action_verb_hits": verbs_found,
         "passive_hits": passive_hits,
         "sections_ok": len(sections_present),
     }
-
+    print(f"[DEBUG] quantify_issues result = {result}")
+    return result
 
 def build_suggestions(resume_text: str, jd_text: str,
                       missing: List[str], semantic: float, overlap: float,
                       issues: Dict[str, int]) -> List[str]:
+    print("[DEBUG] build_suggestions called")
     sug = []
     if missing:
         sug.append(f"Mirror the JD by adding these missing skills (where relevant): {', '.join(missing[:10])}.")
@@ -154,4 +191,6 @@ def build_suggestions(resume_text: str, jd_text: str,
 
     if not sug:
         sug.append("Looks solid! Consider a final proofread and tailor the top bullets for the JD.")
+
+    print(f"[DEBUG] build_suggestions result = {sug}")
     return sug
