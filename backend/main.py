@@ -20,8 +20,7 @@ app = FastAPI(title="TalentAlign Analyzer", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",   # local dev
-        "https://talentalign.vercel.app",  # vercel frontend
+        "https://talentalign-black.vercel.app",  # Your Vercel frontend
     ],
     allow_credentials=True,
     allow_methods=["*"],
