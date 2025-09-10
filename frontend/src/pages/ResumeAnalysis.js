@@ -281,6 +281,12 @@ export default function ResumeAnalysis() {
     }, fromDrop ? 350 : 800);
   };
 
+  // Define this once at the top of your component/file
+  const API_BASE =
+    window.location.hostname === "localhost"
+      ? "http://localhost:8000"
+      : "https://talentalign.onrender.com";
+
   const handleScan = async () => {
     if (!resumeFile) {
       alert("Please upload your resume first.");
@@ -299,10 +305,11 @@ export default function ResumeAnalysis() {
     formData.append("job_description", jobDescription);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/analyze", {
+      const res = await fetch(`${API_BASE}/analyze`, {
         method: "POST",
         body: formData,
       });
+
       const data = await res.json();
       setAnalysis(data);
       setStep(3);
@@ -320,6 +327,7 @@ export default function ResumeAnalysis() {
       setTimeout(() => setProgress(0), 500);
     }
   };
+
 
   const startOver = () => {
     setStep(1);
@@ -418,8 +426,8 @@ export default function ResumeAnalysis() {
               <div className="flex items-center" key={s.id} title={s.label}>
                 <div
                   className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold border-2 ${step >= s.id
-                      ? "bg-[#6366F1] text-white border-[#6366F1]"
-                      : "bg-white text-gray-500 border-gray-300"
+                    ? "bg-[#6366F1] text-white border-[#6366F1]"
+                    : "bg-white text-gray-500 border-gray-300"
                     }`}
                 >
                   {step > s.id ? <CheckCircle className="w-5 h-5" /> : s.id}

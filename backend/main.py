@@ -1,10 +1,14 @@
-# backend/main.py
 import os
 import traceback
 from typing import Optional
-
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+# Allowed frontend origins
+origins = [
+    "http://localhost:3000",         # local dev
+    "https://talentalign.vercel.app"  # deployed frontend
+]
 
 # Analyzer modules
 from analyzer.extractor import extract_text_bytes, normalize, guess_sections
@@ -20,7 +24,7 @@ app = FastAPI(title="TalentAlign Analyzer", version="0.1.0")
 # ✅ CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # your React frontend
+    allow_origins=origins,   # now both localhost + vercel allowed
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,13 +84,12 @@ async def analyze(
         # ---- Sections
         sections = guess_sections(resume_norm) or {}
 
-        # ---- Skills (✅ FIXED)
+        # ---- Skills
         jd_skills_exact = set(find_skills(jd_norm) or [])
         res_skills_exact = set(find_skills(resume_norm) or [])
 
         # Only fuzzy-expand resume, NOT the JD
         res_fuzzy = set(fuzzy_fill(resume_norm, threshold=95) or [])
-
         jd_skills = jd_skills_exact
         res_skills = res_skills_exact.union(res_fuzzy)
 
@@ -130,3 +133,4 @@ async def analyze(
 @app.get("/")
 def root():
     return {"message": "TalentAlign Analyzer is running. See /health or POST /analyze."}
+    
