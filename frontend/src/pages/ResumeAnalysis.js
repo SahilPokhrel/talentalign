@@ -1,5 +1,6 @@
 // src/pages/ResumeAnalysis.js
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { API_BASE } from "../config";
 import Navbar from "../components/Navbar";
 import {
   Upload,
@@ -288,45 +289,45 @@ export default function ResumeAnalysis() {
       : "https://talentalign.onrender.com";
 
   const handleScan = async () => {
-    if (!resumeFile) {
-      alert("Please upload your resume first.");
-      return;
+  if (!resumeFile) {
+    alert("Please upload your resume first.");
+    return;
+  }
+  if (!jobDescription.trim()) {
+    alert("Please paste a job description or select a sample.");
+    return;
+  }
+
+  setLoading(true);
+  setAnalysis(null);
+
+  const formData = new FormData();
+  formData.append("file", resumeFile);
+  formData.append("job_description", jobDescription);
+
+  try {
+    const res = await fetch(`${API_BASE}/analyze`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json();
+    setAnalysis(data);
+    setStep(3);
+    setShowIntro(true);
+    if (typeof data?.ats_score === "number") {
+      localStorage.setItem("ta_last_score", String(data.ats_score));
+      setLastScore(data.ats_score);
     }
-    if (!jobDescription.trim()) {
-      alert("Please paste a job description or select a sample.");
-      return;
-    }
-
-    setLoading(true);
-    setAnalysis(null);
-
-    const formData = new FormData();
-    formData.append("file", resumeFile);
-    formData.append("job_description", jobDescription);
-
-    try {
-      const res = await fetch(`${API_BASE}/analyze`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      setAnalysis(data);
-      setStep(3);
-      setShowIntro(true);
-      if (typeof data?.ats_score === "number") {
-        localStorage.setItem("ta_last_score", String(data.ats_score));
-        setLastScore(data.ats_score);
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Error analyzing resume.");
-    } finally {
-      setLoading(false);
-      setProgress(100);
-      setTimeout(() => setProgress(0), 500);
-    }
-  };
+  } catch (e) {
+    console.error(e);
+    alert("Error analyzing resume.");
+  } finally {
+    setLoading(false);
+    setProgress(100);
+    setTimeout(() => setProgress(0), 500);
+  }
+};
 
 
   const startOver = () => {
