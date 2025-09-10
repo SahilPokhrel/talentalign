@@ -17,16 +17,20 @@ MAX_FILE_BYTES = 8 * 1024 * 1024  # 8 MB
 app = FastAPI(title="TalentAlign Analyzer", version="0.1.0")
 
 # ✅ CORS setup
+origins = [
+    "http://localhost:3000",
+    "https://talentalign-black.vercel.app",
+    "https://talentalign-git-main-sahil-pokhrels-projects.vercel.app",
+    "https://talentalign-gm8x2tqv7-sahil-pokhrels-projects.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://talentalign-black.vercel.app",  # Your Vercel frontend
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 def _ext_ok(filename: str) -> bool:
     _, ext = os.path.splitext(filename or "")
